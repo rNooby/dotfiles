@@ -1,0 +1,45 @@
+[[ pacman start ]]
+bat
+brightnessctl
+cliphist
+dunst
+eza
+ffmpegthumbnailer
+firefox
+fzf
+grim
+hypridle
+hyprland
+hyprlock
+hyprpaper
+imagemagick
+jq
+kitty
+lazygit
+lf
+libnotify
+neofetch
+neovim
+npm
+obsidian
+p7zip
+pacman-contrib
+rofi-wayland
+slurp
+tar
+trash-cli
+ttf-jetbrains-mono-nerd
+unrar
+unzip
+vlc
+waybar
+xdg-desktop-portal-hyprland
+zoxide
+zsh
+[[ pacman end ]]
+
+[[ paru start ]]
+pyprland
+spotify-adblock-git
+webcord
+[[ paru end ]]

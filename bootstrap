@@ -1,0 +1,254 @@
+#!/usr/bin/env bash
+
+shopt -s dotglob
+
+script_dir="$(cd "$(dirname "${0}")" && pwd -P)"
+config_dir="${script_dir}/config"
+configrc_dir="${script_dir}/config.rc"
+
+packages_file="${script_dir}/packages.txt"
+
+function fprint() {
+  local str="${1}" type="${2}" newline="${3}"
+
+  declare -A colors=(
+    [red]="\033[31m"
+    [yellow]="\033[33m"
+    [blue]="\033[34m"
+    [reset]="\033[0m"
+  )
+
+  local color="blue" type_prefix=""
+
+  case "${type}" in
+  "err")
+    type_prefix=":err:"
+    color="red"
+    ;;
+  "info")
+    type_prefix="::"
+    ;;
+  "warn")
+    type_prefix=":warn:"
+    color="yellow"
+    ;;
+  esac
+
+  if [[ "${newline}" -eq 0 ]]; then
+    printf "%b%s%b %s\n" "${colors[${color}]}" "${type_prefix}" "${colors["reset"]}" "${str}"
+  else
+    printf "%b%s%b %s" "${colors[${color}]}" "${type_prefix}" "${colors["reset"]}" "${str}"
+  fi
+}
+
+function finish-bootstrap() {
+  local default_shell=""
+  default_shell="$(printf "%s\n" "${SHELL}")"
+
+  if ! package-exist "zsh"; then
+    fprint "Package \"zsh\" isn't installed, installing." "warn"
+    sudo pacman -S --noconfirm "zsh" || {
+      fprint "Failed to install package \"zsh\", exiting." "err"
+      exit 1
+    }
+  fi
+
+  local zsh_path=""
+  zsh_path="$(which zsh)"
+
+  if [[ "${default_shell}" != "${zsh_path}" ]]; then
+    chsh -s "$(printf '%s\n' "${zsh_path}")" || {
+      fprint "Failed to default shell to \"${zsh_path}\", exiting." "err"
+      exit 1
+    }
+  else
+    fprint "Default shell is already \"${default_shell}\", skipping." "info"
+  fi
+
+  local zshenv_file=""
+  zshenv_file="${script_dir}/config/.zshenv"
+
+  sed -i '/# DOTFILES BOOTSTRAP START/,/# DOTFILES BOOTSTRAP END/d' "${zshenv_file}"
+  fprint "Removed bootstrap lines from file \"${zshenv_file}\"." "info"
+
+  cat <<EOF >>"${zshenv_file}"
+# DOTFILES BOOTSTRAP START
+export DOTFILES_DIR="${script_dir}"
+# DOTFILES BOOTSTRAP END
+EOF
+  fprint "Appened bootstrap lines to file \"${zshenv_file}\"." "info"
+}
+
+function install-paru() {
+  if ! package-exist "base-devel"; then
+    sudo pacman -S --needed --noconfirm "base-devel" || {
+      fprint "Failed to install package \"base-devel\", exiting." "err"
+      exit 1
+    }
+    fprint "Installed package \"base-devel\" via pacman." "info"
+  else
+    fprint "Package \"base-devel\" is already installed, skipping." "info"
+  fi
+
+  local item_dest="" default_dest="${HOME}/.paru"
+  fprint "Paru installation destination [${default_dest}] " "info" 1
+  read -r item_dest
+  item_dest=$(eval printf "%s" "${item_dest:-${default_dest}}")
+  echo "${item_dest}"
+
+  if ! package-exist "git"; then
+    sudo pacman -S --noconfirm "git" || {
+      fprint "Failed to install package \"git\", exiting." "err"
+      exit 1
+    }
+    fprint "Installed package \"git\" via pacman." "info"
+  else
+    fprint "Package \"git\" is already installed, skipping." "info"
+  fi
+
+  git clone "https://aur.archlinux.org/paru-git.git" "${item_dest}" || {
+    fprint "Failed to clone \"https://aur.archlinux.org/paru-git.git\" to \"${item_dest}\"." "err"
+    exit 1
+  }
+  cd "${item_dest}" || {
+    fprint "Failed to change into directory \"${item_dest}\"." "err"
+    exit 1
+  }
+  makepkg -si || {
+    fprint "Failed to build package \"paru\"." "err"
+    exit 1
+  }
+}
+
+function install-packages() {
+  [[ ! -r "${packages_file}" ]] && {
+    fprint "File \"${packages_file}\" isn't readable, exiting." "err"
+    exit 1
+  }
+
+  if ! package-exist "paru"; then
+    install-paru
+  else
+    fprint "Package \"paru\" is already installed, skipping." "info"
+  fi
+
+  local pacman_packages paru_packages
+  pacman_packages=$(awk '/\[\[ pacman start \]\]/ {flag=1; next} /\[\[ pacman end \]\]/ {flag=0} flag' "${packages_file}")
+  paru_packages=$(awk '/\[\[ paru start \]\]/ {flag=1; next} /\[\[ paru end \]\]/ {flag=0} flag' "${packages_file}")
+
+  IFS=$'\n' read -r -d '' -a pacman_packages <<<"${pacman_packages}"
+  IFS=$'\n' read -r -d '' -a paru_packages <<<"${paru_packages}"
+
+  [[ -z "${pacman_packages}" ]] && {
+    fprint "No pacman packages found in file \"${packages_file}\", exiting." "err"
+    exit 1
+  }
+
+  [[ -z "${paru_packages}" ]] && {
+    fprint "No paru packages found in file \"${packages_file}\", exiting." "err"
+    exit 1
+  }
+
+  for package in "${pacman_packages[@]}"; do
+    if package-exist "${package}"; then
+      fprint "Package \"${package}\" is already installed, skipping." "info"
+    else
+      sudo pacman -S --noconfirm "${package}" || {
+        fprint "Failed to install package \"${package}\", exiting." "err"
+        exit 1
+      }
+      fprint "Installed package \"${package}\" via pacman." "info"
+    fi
+  done
+
+  for package in "${paru_packages[@]}"; do
+    if package-exist "${package}"; then
+      fprint "Package \"${package}\" is already installed, skipping." "info"
+    else
+      paru -S --noconfirm "${package}" || {
+        fprint "Failed to install package \"${package}\", exiting." "err"
+        exit 1
+      }
+      fprint "Installed package \"${package}\" via paru." "info"
+    fi
+  done
+}
+
+function link-dotfiles() {
+  for item in "${config_dir}"/*; do
+    [[ "$(basename "${item}")" == "Wallpapers" ]] && continue
+
+    [[ ! -r "${item}" ]] && {
+      fprint "Item \"${item}\" isn't readable, continuing." "warn"
+      continue
+    }
+
+    local item_dest=""
+    item_dest="$(read-rc "$(basename "${item}")")"
+
+    if [[ -e "${item_dest}" ]]; then
+      local action=""
+      fprint "Item destination \"${item_dest}\" already exists." "warn"
+      fprint "Choose an action [(o)verwrite, (b)ackup and overwrite, (s)kip] " "warn" 1
+      read -r action
+      case "${action}" in
+      o)
+        rm -rf "${item_dest}"
+        fprint "Deleted destination \"${item_dest}\"." "info"
+        ;;
+      b)
+        mv "${item_dest}" "${item_dest}.bak"
+        fprint "Backed up destination \"${item_dest}\" at \"${item_dest}.bak\"." "info"
+        ;;
+      s | *)
+        fprint "Skipping \"${item_dest}\"." "info"
+        continue
+        ;;
+      esac
+    fi
+
+    mkdir -p "$(dirname "${item_dest}")"
+
+    ln -s "${item}" "${item_dest}" || {
+      fprint "Failed to symlink item \"${item}\" to \"${item_dest}\", exiting."
+      exit 1
+    }
+    fprint "Symlinked destination \"${item_dest}\" to item \"${item}\"." "info"
+  done
+}
+
+function package-exist() {
+  local packages="${1}"
+  if pacman -Qq | grep -q "${packages}"; then
+    return 0
+  else
+    return 1
+  fi
+}
+
+function read-rc() {
+  local item="${1}" itemrc=""
+
+  [[ -z "${item}" ]] && exit 1
+
+  itemrc="${configrc_dir}/${item}.rc"
+
+  [[ ! -r "${itemrc}" ]] && {
+    fprint "Failed to read file \"${itemrc}\", exiting" "err"
+    exit 1
+  }
+
+  local item_dest=""
+  item_dest="$(cat "${itemrc}")"
+
+  [[ -z "${item_dest}" ]] && {
+    fprint "Failed to read destination in file \"${itemrc}\", exiting." "err" 0
+    exit 1
+  }
+
+  printf "%s\n" "$(eval printf "%s" "${item_dest}")"
+}
+
+install-packages
+link-dotfiles
+finish-bootstrap

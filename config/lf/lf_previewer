@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+
+case "$(file -Lb --mime-type -- "${1}")" in
+image/*)
+	kitty +kitten icat --silent --stdin no --transfer-mode file --place "${2}x${3}@${4}x${5}" "${1}" </dev/null >/dev/tty
+	exit 1
+	;;
+video/*)
+	kitty +kitten icat --silent --stdin no --transfer-mode file --place "${2}x${3}@${4}x${5}" "$(vidthumb "${1}")" </dev/null >/dev/tty
+	exit 1
+	;;
+*)
+	bat --line-range=:37 "${1}" </dev/null
+	;;
+esac

@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+
+pkill dunst
+dunst -config ~/.config/dunst/dunstrc &
+
+pkill hypridle
+hypridle --config ~/.config/hypr/hypridle.conf &
+
+pkill hyprpaper
+hyprpaper --config ~/.config/hypr/hyprpaper.conf &
+
+pkill waybar
+waybar --config ~/.config/waybar/config --style ~/.config/waybar/style.css &

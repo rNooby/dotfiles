@@ -1,0 +1,19 @@
+[pyprland]
+plugins = [ "scratchpads" ]
+
+[pyprland.variables]
+term_classed = "$TERMINAL --class"
+
+[scratchpads.spotify]
+animation = "fromTop"
+command = "spotify"
+class = "Spotify"
+size = "80% 80%"
+max_size = "1600px 100%"
+
+[scratchpads.terminal]
+animation = "fromTop"
+command = "[term_classed] scratchpad"
+class = "scratchpad"
+size = "80% 80%"
+max_size = "1600px 100%"
