@@ -41,7 +41,7 @@ function battery-info() {
 
 function media-info() {
   local media_status="" media_artist="" media_album="" media_player="" media_title=""
-  local text="" tooltip="" icon=""
+  local icon="" text="" tooltip=""
 
   media_status="$(playerctl -s status)"
   media_artist="$(playerctl -s metadata --format '{{artist}}')"
@@ -54,33 +54,18 @@ function media-info() {
     icon="󰓇  "
   fi
 
-  if [[ "${1}" == "waybar" ]]; then
-    media_album="$(playerctl -s metadata --format '{{album}}')"
-    text="${icon}${media_artist:+${media_artist} - }${media_title}"
-    tooltip="${media_status} ${media_artist:+${media_artist} - }${media_album:+${media_album} - }${media_title}"
+  media_album="$(playerctl -s metadata --format '{{album}}')"
+  text="${icon}${media_artist:+${media_artist} - }${media_title}"
+  tooltip="${media_status} ${media_artist:+${media_artist} - }${media_album:+${media_album} - }${media_title}"
 
+  if [[ "${1}" == "waybar" ]]; then
     if [[ -n "${text}" && -n "${tooltip}" ]]; then
-      printf '{"text":"%s", "tooltip":"%s"}\n' "${text}" "${tooltip}"
+      printf "{\"text\":\"%s\", \"tooltip\":\"%s\"}\n" "${text}" "${tooltip}"
     else
       exit 0
     fi
   else
-    if [[ -n "${media_title}" ]]; then
-      if [[ -n "${media_artist}" ]]; then
-        if [[ ${#media_artist} -gt 30 ]]; then
-          printf "%s%.30s...\n" "${icon}" "${media_artist}"
-        else
-          printf "%s%s\n" "${icon}" "${media_artist}"
-        fi
-      fi
-      if [[ ${#media_title} -gt 30 ]]; then
-        printf "%.30s...\n" "${media_title}"
-      else
-        printf "%s\n" "${media_title}"
-      fi
-    else
-      exit 0
-    fi
+    printf "%s\n" "${text}"
   fi
 }
 
