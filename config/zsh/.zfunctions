@@ -1,93 +1,93 @@
 #!/usr/bin/env bash
 
 function run() {
-  local ARGS=("$@")
-  case "${ARGS[1]}" in
+  local args=("$@")
+  case "${args[1]}" in
   *.lua)
-    lua "${ARGS[@]}"
+    lua "${args[@]}"
     ;;
   *.py)
-    python3 "${ARGS[@]}"
+    python3 "${args[@]}"
     ;;
   *.sh)
-    bash "${ARGS[@]}"
+    bash "${args[@]}"
     ;;
   *.zsh)
-    source "${ARGS[@]}"
+    source "${args[@]}"
     ;;
   *)
-    ./"${ARGS[@]}"
+    ./"${args[@]}"
     ;;
   esac
 }
 
 function srt() {
-  local SORT_OPTIONS=""
+  local sort_opts=""
   while [[ "${1}" == -* ]]; do
-    if [[ -z "${SORT_OPTIONS}" ]]; then
-      SORT_OPTIONS="${1}"
+    if [[ -z "${sort_opts}" ]]; then
+      sort_opts="${1}"
     else
-      SORT_OPTIONS="${SORT_OPTIONS} ${1}"
+      sort_opts="${sort_opts} ${1}"
     fi
     shift
   done
 
   [[ "${#}" -eq 0 ]] && return 1
-  local ARGS=("${@}")
+  local args=("${@}")
 
-  if [[ -z "${SORT_OPTIONS}" ]]; then
-    echo "${ARGS[@]}" | tr " " "\n" | sort
+  if [[ -z "${sort_opts}" ]]; then
+    echo "${args[@]}" | tr " " "\n" | sort
   else
-    echo "${ARGS[@]}" | tr " " "\n" | sort "${SORT_OPTIONS}"
+    echo "${args[@]}" | tr " " "\n" | sort "${sort_opts}"
   fi
 }
 
 function takedir() {
-  local DIRS=("${@}")
-  [[ -z "${DIRS[1]}" ]] && return 1
-  mkdir -p "${DIRS[@]}" && cd "${@: -1}" || return 1
+  local dirs=("${@}")
+  [[ -z "${dirs[1]}" ]] && return 1
+  mkdir -p "${dirs[@]}" && cd "${@: -1}" || return 1
 }
 
 function takegit() {
-  local URL="${1}" DEST="${2}"
-  git clone "${URL}" "${DEST}"
+  local url="${1}" dest="${2}"
+  git clone "${url}" "${dest}"
 
-  if [[ -n "${DEST}" ]]; then
-    cd "${DEST}" || return 1
+  if [[ -n "${dest}" ]]; then
+    cd "${dest}" || return 1
   else
-    cd "$(basename "${URL%%.git}")" || return 1
+    cd "$(basename "${url%%.git}")" || return 1
   fi
 }
 
 function take() {
-  local DIR=("${@}") URL="${1}" DEST="${2}"
-  if [[ "${URL}" =~ ^([A-Za-z0-9]\+@|https?|git|ssh|ftps?|rsync).*?$ ]]; then
-    takegit "${URL}" "${DEST}"
+  local dir=("${@}") url="${1}" dest="${2}"
+  if [[ "${url}" =~ ^([A-Za-z0-9]\+@|https?|git|ssh|ftps?|rsync).*?$ ]]; then
+    takegit "${url}" "${dest}"
   else
-    takedir "${DIR[@]}"
+    takedir "${dir[@]}"
   fi
 }
 
 function unarchive() {
-  local FILE="${1}"
-  case "${FILE}" in
+  local file="${1}"
+  case "${file}" in
   *.zip)
-    unzip "${FILE}" || return 1
+    unzip "${file}" || return 1
     ;;
   *.rar)
-    unrar x "${FILE}" || return 1
+    unrar x "${file}" || return 1
     ;;
   *.tar.gz)
-    tar -xzvf "${FILE}" || return 1
+    tar -xzvf "${file}" || return 1
     ;;
   *.tar.bz2)
-    tar -xjvf "${FILE}" || return 1
+    tar -xjvf "${file}" || return 1
     ;;
   *.tar)
-    tar -xvf "${FILE}" || return 1
+    tar -xvf "${file}" || return 1
     ;;
   *.7z)
-    7z e "${FILE}" || return 1
+    7z e "${file}" || return 1
     ;;
   *)
     return 1
@@ -96,10 +96,10 @@ function unarchive() {
 }
 
 function web-search() {
-  local ENGINE="" QUERY=""
-  local TLD_REGEX="\.[a-zA-Z]{2,63}"
+  local engine="" query=""
+  local tld_regex="\.[a-zA-Z]{2,63}"
 
-  declare -A ENGINES=(
+  declare -A engines=(
     [--archwiki]="https://wiki.archlinux.org/index.php?search="
     [--duckduckgo]="https://www.duckduckgo.com/?q="
     [--github]="https://github.com/search?q="
@@ -111,59 +111,59 @@ function web-search() {
 
   function open-url() {
     (
-      local URL="${1}"
+      local url="${1}"
       if command -v open >/dev/null 2>&1; then
-        open "${URL}" >/dev/null 2>&1 &
+        open "${url}" >/dev/null 2>&1 &
       elif command -v start >/dev/null 2>&1; then
-        start "${URL}" >/dev/null 2>&1 &
+        start "${url}" >/dev/null 2>&1 &
       elif command -v xdg-open >/dev/null 2>&1; then
-        xdg-open "${URL}" >/dev/null 2>&1 &
+        xdg-open "${url}" >/dev/null 2>&1 &
       fi
     )
   }
 
   function validate-url() {
-    local URL="${1}"
+    local url="${1}"
 
-    if [[ ! "${URL}" =~ ^https?:// ]]; then
-      if [[ ! "${URL}" =~ ${TLD_REGEX} ]]; then
-        URL="https://${URL}.com"
+    if [[ ! "${url}" =~ ^https?:// ]]; then
+      if [[ ! "${url}" =~ ${tld_regex} ]]; then
+        url="https://${url}.com"
       else
-        URL="https://${URL}"
+        url="https://${url}"
       fi
-    elif [[ ! "${URL}" =~ ${TLD_REGEX} ]]; then
-      URL="${URL}.com"
+    elif [[ ! "${url}" =~ ${tld_regex} ]]; then
+      url="${url}.com"
     fi
 
-    echo "${URL}"
+    echo "${url}"
   }
 
-  if [[ -z "${2}" && -z "${ENGINES[$1]}" ]]; then
-    local URL
-    URL="$(validate-url "${1}")"
+  if [[ -z "${2}" && -z "${engines[$1]}" ]]; then
+    local url
+    url="$(validate-url "${1}")"
 
-    if [[ -n "${URL}" ]]; then
-      open-url "${URL}"
+    if [[ -n "${url}" ]]; then
+      open-url "${url}"
       return 0
     else
       return 1
     fi
   fi
 
-  for ARG in "${@}"; do
-    if [[ "${ARG}" == --* ]]; then
-      if [[ -z "${ENGINES[$ARG]}" ]]; then
+  for arg in "${@}"; do
+    if [[ "${arg}" == --* ]]; then
+      if [[ -z "${engines[$arg]}" ]]; then
         return 1
       fi
-      ENGINE="${ARG}"
+      engine="${arg}"
     else
-      QUERY="${QUERY}+${ARG// /+}"
+      query="${query}+${arg// /+}"
     fi
   done
 
-  [[ -z "${ENGINE}" ]] && ENGINE="--google"
+  [[ -z "${engine}" ]] && engine="--google"
 
-  open-url "${ENGINES[${ENGINE}]}${QUERY}"
+  open-url "${engines[${engine}]}${query}"
 }
 
 alias google="web-search"

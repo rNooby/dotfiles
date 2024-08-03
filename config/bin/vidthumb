@@ -4,33 +4,33 @@ if ! [ -f "${1}" ]; then
   exit 1
 fi
 
-cache="${HOME}/.cache/vidthumb"
-index="${cache}/index.json"
-movie="$(realpath "${1}")"
+CACHE="${HOME}/.CACHE/vidthumb"
+INDEX="${CACHE}/INDEX.JSON"
+MOVIE="$(realpath "${1}")"
 
-mkdir -p "${cache}"
+mkdir -p "${CACHE}"
 
-if [ -f "${index}" ]; then
-  thumbnail="$(jq -r ". \"${movie}\"" <"${index}")"
-  if [[ "${thumbnail}" != "null" ]]; then
-    if [[ ! -f "${cache}/${thumbnail}" ]]; then
+if [ -f "${INDEX}" ]; then
+  THUMBNAIL="$(jq -r ". \"${MOVIE}\"" <"${INDEX}")"
+  if [[ "${THUMBNAIL}" != "null" ]]; then
+    if [[ ! -f "${CACHE}/${THUMBNAIL}" ]]; then
       exit 1
     fi
-    echo "${cache}/${thumbnail}"
+    echo "${CACHE}/${THUMBNAIL}"
     exit 0
   fi
 fi
 
-thumbnail="$(uuidgen).jpg"
+THUMBNAIL="$(uuidgen).jpg"
 
-if ! ffmpegthumbnailer -i "${movie}" -o "${cache}/${thumbnail}" -s 0 2>/dev/null; then
+if ! ffmpegthumbnailer -i "${MOVIE}" -o "${CACHE}/${THUMBNAIL}" -s 0 2>/dev/null; then
   exit 1
 fi
 
-if [[ ! -f "${index}" ]]; then
-  echo "{\"${movie}\": \"${thumbnail}\"}" >"${index}"
+if [[ ! -f "${INDEX}" ]]; then
+  echo "{\"${MOVIE}\": \"${THUMBNAIL}\"}" >"${INDEX}"
 fi
-json="$(jq -r --arg "${movie}" "${thumbnail}" ". + {\"${movie}\": \"${thumbnail}\"}" <"${index}")"
-echo "${json}" >"${index}"
+JSON="$(jq -r --arg "${MOVIE}" "${THUMBNAIL}" ". + {\"${MOVIE}\": \"${THUMBNAIL}\"}" <"${INDEX}")"
+echo "${JSON}" >"${INDEX}"
 
-echo "${cache}/${thumbnail}"
+echo "${CACHE}/${THUMBNAIL}"

@@ -2,11 +2,11 @@
 
 shopt -s dotglob
 
-script_dir="$(cd "$(dirname "${0}")" && pwd -P)"
-config_dir="${script_dir}/config"
-configrc_dir="${script_dir}/config.rc"
+SCRIPT_DIR="$(cd "$(dirname "${0}")" && pwd -P)"
+CONFIG_DIR="${SCRIPT_DIR}/config"
+CONFIG_RC_DIR="${SCRIPT_DIR}/config.rc"
 
-packages_file="${script_dir}/packages.txt"
+PACKAGES_FILE="${SCRIPT_DIR}/packages.txt"
 
 function fprint() {
   local str="${1}" type="${2}" newline="${3}"
@@ -66,14 +66,14 @@ function finish-bootstrap() {
   fi
 
   local zshenv_file=""
-  zshenv_file="${script_dir}/config/.zshenv"
+  zshenv_file="${SCRIPT_DIR}/config/.zshenv"
 
   sed -i '/# DOTFILES BOOTSTRAP START/,/# DOTFILES BOOTSTRAP END/d' "${zshenv_file}"
   fprint "Removed bootstrap lines from file \"${zshenv_file}\"." "info"
 
   cat <<EOF >>"${zshenv_file}"
 # DOTFILES BOOTSTRAP START
-export DOTFILES_DIR="${script_dir}"
+export DOTFILES_DIR="${SCRIPT_DIR}"
 # DOTFILES BOOTSTRAP END
 EOF
   fprint "Appened bootstrap lines to file \"${zshenv_file}\"." "info"
@@ -121,8 +121,8 @@ function install-paru() {
 }
 
 function install-packages() {
-  [[ ! -r "${packages_file}" ]] && {
-    fprint "File \"${packages_file}\" isn't readable, exiting." "err"
+  [[ ! -r "${PACKAGES_FILE}" ]] && {
+    fprint "File \"${PACKAGES_FILE}\" isn't readable, exiting." "err"
     exit 1
   }
 
@@ -133,19 +133,19 @@ function install-packages() {
   fi
 
   local pacman_packages paru_packages
-  pacman_packages=$(awk '/\[\[ pacman start \]\]/ {flag=1; next} /\[\[ pacman end \]\]/ {flag=0} flag' "${packages_file}")
-  paru_packages=$(awk '/\[\[ paru start \]\]/ {flag=1; next} /\[\[ paru end \]\]/ {flag=0} flag' "${packages_file}")
+  pacman_packages=$(awk '/\[\[ pacman start \]\]/ {flag=1; next} /\[\[ pacman end \]\]/ {flag=0} flag' "${PACKAGES_FILE}")
+  paru_packages=$(awk '/\[\[ paru start \]\]/ {flag=1; next} /\[\[ paru end \]\]/ {flag=0} flag' "${PACKAGES_FILE}")
 
   IFS=$'\n' read -r -d '' -a pacman_packages <<<"${pacman_packages}"
   IFS=$'\n' read -r -d '' -a paru_packages <<<"${paru_packages}"
 
   [[ -z "${pacman_packages}" ]] && {
-    fprint "No pacman packages found in file \"${packages_file}\", exiting." "err"
+    fprint "No pacman packages found in file \"${PACKAGES_FILE}\", exiting." "err"
     exit 1
   }
 
   [[ -z "${paru_packages}" ]] && {
-    fprint "No paru packages found in file \"${packages_file}\", exiting." "err"
+    fprint "No paru packages found in file \"${PACKAGES_FILE}\", exiting." "err"
     exit 1
   }
 
@@ -175,7 +175,7 @@ function install-packages() {
 }
 
 function link-dotfiles() {
-  for item in "${config_dir}"/*; do
+  for item in "${CONFIG_DIR}"/*; do
     [[ "$(basename "${item}")" == "Wallpapers" ]] && continue
 
     [[ ! -r "${item}" ]] && {
@@ -231,7 +231,7 @@ function read-rc() {
 
   [[ -z "${item}" ]] && exit 1
 
-  itemrc="${configrc_dir}/${item}.rc"
+  itemrc="${CONFIG_RC_DIR}/${item}.rc"
 
   [[ ! -r "${itemrc}" ]] && {
     fprint "Failed to read file \"${itemrc}\", exiting" "err"
