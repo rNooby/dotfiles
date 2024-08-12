@@ -1,0 +1,212 @@
+#!/usr/bin/env bash
+
+function set-audio() {
+  case "${1}" in
+  "inc")
+    wpctl set-mute @DEFAULT_AUDIO_SINK@ 0
+    wpctl set-volume -l 2.0 @DEFAULT_AUDIO_SINK@ "${2}%+"
+    ;;
+  "dec")
+    wpctl set-mute @DEFAULT_AUDIO_SINK@ 0
+    wpctl set-volume -l 2.0 @DEFAULT_AUDIO_SINK@ "${2}%-"
+    ;;
+  "mute")
+    wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle
+    ;;
+  *)
+    exit 1
+    ;;
+  esac
+
+  local audio_volume="" audio_volume_percent=""
+  local text="" icon=""
+
+  audio_volume="$(wpctl get-volume @DEFAULT_AUDIO_SINK@)"
+  audio_volume_percent="$(printf "%s\n" "${audio_volume}" | tr -dc '0-9' | sed 's/^0\+//')"
+
+  if [[ "${audio_volume}" =~ "MUTED" || "${audio_volume_percent}" -eq 0 ]]; then
+    text="Currently muted."
+    icon="mute"
+  else
+    text="Currently at ${audio_volume_percent}%."
+    if ((audio_volume_percent <= 30)); then
+      icon="low"
+    elif ((audio_volume_percent <= 60)); then
+      icon="medium"
+    else
+      icon="high"
+    fi
+  fi
+
+  dunstify -a "Volume" -r 9993 -h "int:value:$((audio_volume_percent / 2))" -i "audio-${icon}" "Audio" "${text}"
+}
+
+function set-backlight() {
+  case "${1}" in
+  "inc")
+    brightnessctl -e4 "set" "${2}%+"
+    ;;
+  "dec")
+    brightnessctl -e4 "set" "${2}%-"
+    ;;
+  *)
+    exit 1
+    ;;
+  esac
+
+  local backlight_brightness="" icon=""
+  backlight_brightness="$(brightnessctl -e4 -m | awk -F, '{print substr($4, 0, length($4)-1)}')" icon="high"
+
+  if [[ "${backlight_brightness}" -le 30 ]]; then
+    icon="low"
+  elif [[ "${backlight_brightness}" -le 60 ]]; then
+    icon="medium"
+  fi
+
+  dunstify -a "Backlight" -h "int:value:${backlight_brightness}" -i "brightness-${icon}" -r 9993 "Backlight" "Currently at ${backlight_brightness}%."
+}
+
+function set-media() {
+  media_status="$(playerctl -s status)"
+  media_loop="$(playerctl -s loop)"
+
+  [[ -z "${media_status}" ]] && exit 1
+
+  function set-media-mode() {
+    local chosen_mode=""
+    chosen_mode="$(printf "󰝾 None\n Track\n󰐐 Playlist\n Shuffle\n" | awk -v mode="${media_loop}" '$2 != mode' | rofi -dmenu -i -window-title "󰲸 ")"
+
+    [[ -z "${chosen_mode}" ]] && exit 1
+
+    if [[ "${chosen_mode}" == "Shuffle" ]]; then
+      media_shuffle="$(playerctl -s shuffle)"
+
+      playerctl -s shuffle toggle
+
+      if [[ "${media_shuffle}" == "Off" ]]; then
+        dunstify -a "Media" -i "media" -r 9993 "Media" "Enabled shuffle mode."
+      elif [[ "${media_shuffle}" == "On" ]]; then
+        dunstify -a "Media" -i "media" -r 9993 "Media" "Disable shuffle mode."
+      else
+        exit 1
+      fi
+    else
+      chosen_mode="$(printf "%s\n" "${chosen_mode}" | awk '{print $2}')"
+      playerctl -s loop "${chosen_mode}"
+      dunstify -a "Media" -i "media" -r 9993 "Media" "Set loop mode to ${chosen_mode}."
+    fi
+  }
+
+  function toggle-media() {
+    playerctl -s play-pause
+
+    media_loop="$(playerctl -s loop)"
+
+    media_artist="$(playerctl -s metadata xesam:artist)"
+    media_title="$(playerctl -s metadata xesam:title)"
+
+    media_data=""
+
+    if [[ -n "${media_artist}" && -n "${media_title}" ]]; then
+      media_data="${media_artist} - ${media_title}"
+    elif [[ -n "${media_title}" ]]; then
+      media_data="${media_title}"
+    else
+      exit 1
+    fi
+
+    if [[ "${media_status}" == "Playing" ]]; then
+      dunstify -a "Media" -i "media" -r 9993 "Media" "Paused ${media_data}."
+    else
+      dunstify -a "Media" -i "media" -r 9993 "Media" "Playing ${media_data}."
+    fi
+  }
+
+  case "${1}" in
+  "mode")
+    set-media-mode
+    ;;
+  "toggle")
+    toggle-media
+    ;;
+  "next")
+    playerctl next
+    ;;
+  "prev")
+    playerctl previous
+    ;;
+  *)
+    exit 1
+    ;;
+  esac
+}
+
+function set-wallpaper() {
+  local wallpaper_file="${1}" chosen_wallpaper="" current_wallpaper="" chosen_wallpaper_ext=""
+  local hyprpaper_conf="" wallpapers_dir="" wallpapers_dotfile=""
+
+  hyprpaper_conf="${XDG_CONFIG_HOME:-${HOME}/.config}/hypr/hyprpaper.conf"
+  wallpapers_dir="${DOTFILES_DIR:-${HOME}/.dotfiles/}/config/Wallpapers"
+  wallpapers_dotfile="${wallpapers_dir}/.Wallpaper.png"
+
+  current_wallpaper="$(grep '#' "${hyprpaper_conf}" | awk '{print $2}')"
+
+  if [[ -z "${wallpaper_file}" ]]; then
+    chosen_wallpaper="$(
+      find "${wallpapers_dir}" -type f \( -name '*.jpg' -o -name '*.jpeg' -o -name '*.png' \) \
+        ! -name '.*' \
+        ! -name "${current_wallpaper}" \
+        -exec basename {} \; |
+        awk -F. '{print $1}' | rofi -dmenu -i -window-title " "
+    )"
+
+    [[ -z "${chosen_wallpaper}" ]] && exit 1
+
+    if [[ -r "${wallpapers_dir}/${chosen_wallpaper}.jpg" ]]; then
+      wallpaper_file="${wallpapers_dir}/${chosen_wallpaper}.jpg"
+      chosen_wallpaper_ext="${chosen_wallpaper}.jpg"
+    elif [[ -r "${wallpapers_dir}/${chosen_wallpaper}.jpeg" ]]; then
+      wallpaper_file="${wallpapers_dir}/${chosen_wallpaper}.jpeg"
+      chosen_wallpaper_ext="${chosen_wallpaper}.jpeg"
+    elif [[ -r "${wallpapers_dir}/${chosen_wallpaper}.png" ]]; then
+      wallpaper_file="${wallpapers_dir}/${chosen_wallpaper}.png"
+      chosen_wallpaper_ext="${chosen_wallpaper}.png"
+    fi
+  else
+    chosen_wallpaper="$(printf "%s\n" "${wallpaper_file}" | tr '.' ' ' | awk '{print $1}')"
+    chosen_wallpaper_ext="$(basename "${wallpaper_file}")"
+  fi
+
+  if [[ -r "${wallpaper_file}" ]]; then
+    hyprctl hyprpaper unload all >/dev/null
+    hyprctl hyprpaper preload "${wallpaper_file}" >/dev/null
+    hyprctl hyprpaper wallpaper "eDP-1,${wallpaper_file}" >/dev/null
+
+    dunstify -a "Wallpaper" -i "${wallpaper_file}" -r 9993 "Wallpaper" "Set to \"${chosen_wallpaper}\"."
+
+    sed -i "0,/^#/s/^#.*/# ${chosen_wallpaper_ext}/" "${hyprpaper_conf}"
+
+    magick "${wallpaper_file}" -resize 1600x900^ -gravity center -extent "1600x900^" "${wallpapers_dotfile}" >/dev/null
+  else
+    dunstify -a "Wallpaper" -i "wallpaper" -r 9993 "Wallpaper" "File \"${chosen_wallpaper}\" doesn't exist."
+    exit 1
+  fi
+}
+
+case "${1}" in
+"--audio")
+  set-audio "${2}" "${3}"
+  ;;
+"--backlight")
+  set-backlight "${2}" "${3}"
+  ;;
+"--media")
+  set-media "${2}"
+  ;;
+"--wallpaper")
+  set-wallpaper "${2}"
+  ;;
+*)
+  exit 1
+  ;;
+esac

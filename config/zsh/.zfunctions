@@ -1,0 +1,200 @@
+#!/usr/bin/env zsh
+
+function command_not_found_handler {
+  local cmd="${1}"
+  local purple="\033[1;35m" bold="\033[0;1m" green="\033[1;32m" reset="\033[0m"
+  declare -a entries=( ${(f)"$(/usr/bin/pacman -F --machinereadable -- "/usr/bin/$1")"} )
+  if (( ${#entries[@]} )); then
+    printf "${bold}$1${reset} may be found in the following packages:\n"
+    local pkg=""
+    for entry in "${entries[@]}"; do
+      declare -a fields=( "${(0)entry}" )
+      if [[ "${pkg}" != "${fields[2]}" ]]; then
+        printf "    ${purple}%s/${bold}%s ${green}%s${reset} --> %s\n" "${fields[1]}" "${fields[2]}" "${fields[3]}" "${fields[4]}"
+      fi
+      pkg="${fields[2]}"
+    done
+  else
+    printf "zsh: command not found: ${bold}%s${reset}\n" "${cmd}"
+  fi
+  return 127
+}
+
+function run() {
+  local args=("$@")
+  case "${args[1]}" in
+  *.lua)
+    lua "${args[@]}"
+    ;;
+  *.py)
+    python3 "${args[@]}"
+    ;;
+  *.sh)
+    bash "${args[@]}"
+    ;;
+  *.zsh)
+    source "${args[@]}"
+    ;;
+  *)
+    ./"${args[@]}"
+    ;;
+  esac
+}
+
+function srt() {
+  local sort_opts=""
+  while [[ "${1}" == -* ]]; do
+    if [[ -z "${sort_opts}" ]]; then
+      sort_opts="${1}"
+    else
+      sort_opts="${sort_opts} ${1}"
+    fi
+    shift
+  done
+
+  [[ "${#}" -eq 0 ]] && return 1
+  local args=("${@}")
+
+  if [[ -z "${sort_opts}" ]]; then
+    echo "${args[@]}" | tr " " "\n" | sort
+  else
+    echo "${args[@]}" | tr " " "\n" | sort "${sort_opts}"
+  fi
+}
+
+function takedir() {
+  local dirs=("${@}")
+  [[ -z "${dirs[1]}" ]] && return 1
+  mkdir -p "${dirs[@]}" && cd "${@: -1}" || return 1
+}
+
+function takegit() {
+  local url="${1}" dest="${2}"
+  git clone "${url}" "${dest}"
+
+  if [[ -n "${dest}" ]]; then
+    cd "${dest}" || return 1
+  else
+    cd "$(basename "${url%%.git}")" || return 1
+  fi
+}
+
+function take() {
+  local dir=("${@}") url="${1}" dest="${2}"
+  if [[ "${url}" =~ ^([A-Za-z0-9]\+@|https?|git|ssh|ftps?|rsync).*?$ ]]; then
+    takegit "${url}" "${dest}"
+  else
+    takedir "${dir[@]}"
+  fi
+}
+
+function unarchive() {
+  local file="${1}"
+  case "${file}" in
+  *.zip)
+    unzip "${file}" || return 1
+    ;;
+  *.rar)
+    unrar x "${file}" || return 1
+    ;;
+  *.tar.gz)
+    tar -xzvf "${file}" || return 1
+    ;;
+  *.tar.bz2)
+    tar -xjvf "${file}" || return 1
+    ;;
+  *.tar)
+    tar -xvf "${file}" || return 1
+    ;;
+  *.7z)
+    7z e "${file}" || return 1
+    ;;
+  *)
+    return 1
+    ;;
+  esac
+}
+
+function web-search() {
+  local engine="" query=""
+  local tld_regex="\.[a-zA-Z]{2,63}"
+
+  declare -A engines=(
+    [--archwiki]="https://wiki.archlinux.org/index.php?search="
+    [--duckduckgo]="https://www.duckduckgo.com/?q="
+    [--github]="https://github.com/search?q="
+    [--google]="https://www.google.com/search?q="
+    [--reddit]="https://www.reddit.com/search/?q="
+    [--stack]="https://stackoverflow.com/search?q="
+    [--youtube]="https://www.youtube.com/results?search_query="
+  )
+
+  function open-url() {
+    (
+      local url="${1}"
+      if command -v open >/dev/null 2>&1; then
+        open "${url}" >/dev/null 2>&1 &
+      elif command -v start >/dev/null 2>&1; then
+        start "${url}" >/dev/null 2>&1 &
+      elif command -v xdg-open >/dev/null 2>&1; then
+        xdg-open "${url}" >/dev/null 2>&1 &
+      fi
+    )
+  }
+
+  function validate-url() {
+    local url="${1}"
+
+    if [[ ! "${url}" =~ ^https?:// ]]; then
+      if [[ ! "${url}" =~ ${tld_regex} ]]; then
+        url="https://${url}.com"
+      else
+        url="https://${url}"
+      fi
+    elif [[ ! "${url}" =~ ${tld_regex} ]]; then
+      url="${url}.com"
+    fi
+
+    echo "${url}"
+  }
+
+  if [[ -z "${2}" && -z "${engines[$1]}" ]]; then
+    local url
+    url="$(validate-url "${1}")"
+
+    if [[ -n "${url}" ]]; then
+      open-url "${url}"
+      return 0
+    else
+      return 1
+    fi
+  fi
+
+  for arg in "${@}"; do
+    if [[ "${arg}" == --* ]]; then
+      if [[ -z "${engines[$arg]}" ]]; then
+        return 1
+      fi
+      engine="${arg}"
+    else
+      query="${query}+${arg// /+}"
+    fi
+  done
+
+  [[ -z "${engine}" ]] && engine="--google"
+
+  open-url "${engines[${engine}]}${query}"
+}
+
+alias google="web-search"
+
+alias arki="web-search --archwiki"
+alias duckie="web-search --duckduckgo"
+alias github="web-search --github"
+alias reddit="web-search --reddit"
+alias stack="web-search --stack"
+alias search="web-search --google"
+alias youtube="web-search --youtube"
+
+alias aur="web-search --duckduckgo \!aur"
+alias wiki="web-search --duckduckgo \!w"

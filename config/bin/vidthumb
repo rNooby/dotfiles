@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+
+if ! [ -f "${1}" ]; then
+  exit 1
+fi
+
+CACHE="${HOME}/.CACHE/vidthumb"
+INDEX="${CACHE}/INDEX.JSON"
+MOVIE="$(realpath "${1}")"
+
+mkdir -p "${CACHE}"
+
+if [ -f "${INDEX}" ]; then
+  THUMBNAIL="$(jq -r ". \"${MOVIE}\"" <"${INDEX}")"
+  if [[ "${THUMBNAIL}" != "null" ]]; then
+    if [[ ! -f "${CACHE}/${THUMBNAIL}" ]]; then
+      exit 1
+    fi
+    echo "${CACHE}/${THUMBNAIL}"
+    exit 0
+  fi
+fi
+
+THUMBNAIL="$(uuidgen).jpg"
+
+if ! ffmpegthumbnailer -i "${MOVIE}" -o "${CACHE}/${THUMBNAIL}" -s 0 2>/dev/null; then
+  exit 1
+fi
+
+if [[ ! -f "${INDEX}" ]]; then
+  echo "{\"${MOVIE}\": \"${THUMBNAIL}\"}" >"${INDEX}"
+fi
+JSON="$(jq -r --arg "${MOVIE}" "${THUMBNAIL}" ". + {\"${MOVIE}\": \"${THUMBNAIL}\"}" <"${INDEX}")"
+echo "${JSON}" >"${INDEX}"
+
+echo "${CACHE}/${THUMBNAIL}"

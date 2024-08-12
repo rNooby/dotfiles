@@ -1,0 +1,116 @@
+#!/usr/bin/env bash
+
+function audio-info() {
+  local audio_volume="" audio_volume_percent=""
+  local icon=""
+
+  audio_volume="$(wpctl get-volume @DEFAULT_AUDIO_SINK@)"
+  audio_volume_percent="$(printf "%s\n" "${audio_volume}" | tr -dc '0-9' | sed 's/^0\+//')"
+
+  if [[ "${audio_volume}" =~ "MUTED" || "${audio_volume_percent}" -eq 0 ]]; then
+    icon="󰖁"
+  else
+    if ((audio_volume_percent <= 30)); then
+      icon=""
+    elif ((audio_volume_percent <= 60)); then
+      icon=""
+    else
+      icon="󰕾"
+    fi
+  fi
+
+  printf "%s\n" "${icon}"
+}
+
+function battery-info() {
+  local battery_info="" battery_status="" battery_percentage=""
+  battery_info="$(upower -i '/org/freedesktop/UPower/devices/battery_BAT0')"
+  battery_status="$(echo "${battery_info}" | grep 'state' | awk '{print $2}')"
+  battery_percentage="$(echo "${battery_info}" | grep 'percentage' | awk '{print $2}' | tr -d '%')"
+
+  local battery_icons=("󰂃" "󰁺" "󰁻" "󰁼" "󰁽" "󰁾" "󰁿" "󰂀" "󰂁" "󰁹") battery_index=""
+  battery_index="$((battery_percentage / 10))"
+
+  if [[ "${battery_status}" == "charging" ]]; then
+    printf "󰂄\n"
+  else
+    [[ "${battery_index}" -eq 10 ]] && battery_index=9
+    printf "%s\n" "${battery_icons[${battery_index}]}"
+  fi
+}
+
+function media-info() {
+  local media_status="" media_artist="" media_album="" media_player="" media_title=""
+  local icon="" text="" tooltip=""
+
+  media_status="$(playerctl -s status)"
+  media_artist="$(playerctl -s metadata --format '{{artist}}')"
+  media_title="$(playerctl -s metadata --format '{{title}}')"
+  media_player="$(playerctl -s metadata --format '{{playerName}}')"
+
+  if [[ "${media_player}" == "firefox" ]]; then
+    icon="󰈹  "
+  elif [[ "${media_player}" == "spotify" ]]; then
+    icon="󰓇  "
+  fi
+
+  media_album="$(playerctl -s metadata --format '{{album}}')"
+  text="${icon}${media_artist:+${media_artist} - }${media_title}"
+  tooltip="${media_status} ${media_artist:+${media_artist} - }${media_album:+${media_album} - }${media_title}"
+
+  if [[ "${1}" == "waybar" ]]; then
+    if [[ -n "${text}" && -n "${tooltip}" ]]; then
+      printf "{\"text\":\"%s\", \"tooltip\":\"%s\"}\n" "${text}" "${tooltip}"
+    else
+      exit 0
+    fi
+  else
+    printf "%s\n" "${text}"
+  fi
+}
+
+function updates-info() {
+  local pacman_updates="" aur_updates=""
+  pacman_updates="$(checkupdates | wc -l)"
+  aur_updates="$(paru -Qua | wc -l)"
+
+  [[ "${pacman_updates}" -eq 0 && "${aur_updates}" -eq 0 ]] && exit 0
+
+  local text="" tooltip=""
+
+  if [[ "${pacman_updates}" -gt 0 && "${aur_updates}" -gt 0 ]]; then
+    text="󰏔 "
+    tooltip="${pacman_updates} Pacman, ${aur_updates} AUR updates available"
+  elif [[ "${pacman_updates}" -gt 0 ]]; then
+    text="󰏔 "
+    tooltip="${pacman_updates} Pacman updates available"
+  elif [[ "${aur_updates}" -gt 0 ]]; then
+    text="󰏔 "
+    tooltip="${aur_updates} AUR updates available"
+  else
+    exit 0
+  fi
+
+  if [[ -n "${text}" && -n "${tooltip}" ]]; then
+    printf '{"text":"%s", "tooltip":"%s"}\n' "${text}" "${tooltip}"
+    exit 0
+  fi
+}
+
+case "${1}" in
+"--audio")
+  audio-info
+  ;;
+"--battery")
+  battery-info
+  ;;
+"--media")
+  media-info "${2}"
+  ;;
+"--updates")
+  updates-info
+  ;;
+*)
+  exit 1
+  ;;
+esac

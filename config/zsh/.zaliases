@@ -1,0 +1,45 @@
+#!/usr/bin/env zsh
+
+alias .="cd - >/dev/null"
+alias ..="cd .."
+alias ...="cd ../.."
+
+alias c="clear"
+alias cat="bat"
+alias ci="__zoxide_zi"
+
+alias icat="kitty +kitten icat"
+
+alias la="eza --all --color=always --group-directories-first --icons --level 1 --tree"
+alias ll="eza --all --color=always --group-directories-first --icons --level 1 --long --tree"
+alias ls="eza --color=always --group-directories-first --level 1 --icons --tree"
+
+alias te="trash-empty"
+alias tl="trash-list"
+alias tm="trash-rm"
+alias tp="trash-put"
+alias ts="trash-restore"
+
+alias pbcopy="wl-copy"
+alias pbpaste="wl-paste"
+
+alias v="${EDITOR:-${VISUAL:-nano}}"
+alias vim="${EDITOR:-${VISUAL:-nano}}"
+
+alias fzp="fzf --preview 'bat --line-range=:500 {}'"
+alias fzv="fzf --preview 'bat --line-range=:500 {}' | xargs nvim --"
+
+alias src="source"
+
+alias zr="source ${HOME}/.config/zsh/.zshrc"
+
+alias cp="cp -iv"
+alias mkdir="mkdir -pv"
+alias mv="mv -iv"
+alias rm="rm -vI"
+
+alias -g L="| less -R"
+alias -g G="| grep --color=auto"
+
+alias -s {jpg,jpeg,png}="icat"
+alias -s {conf,css,html,js,json,lua,md,python,rs,sh,toml,txt}="nvim"

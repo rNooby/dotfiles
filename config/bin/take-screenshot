@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+
+SCREENSHOTS_DIR="${HOME}/Pictures/Screenshots"
+SCREENSHOT_FILE="${SCREENSHOTS_DIR}/$(date +'%Y-%m-%d %H-%M-%S').png"
+
+[[ ! -d "${SCREENSHOTS_DIR}" ]] && mkdir -p "${SCREENSHOTS_DIR}"
+[[ -z "${SCREENSHOT_FILE}" ]] && exit 1
+
+case "${1}" in
+"--region")
+  grim -g "$(slurp)" "${SCREENSHOT_FILE}" || exit 1
+  dunstify -a "Screenshot" -r 9993 -i "${SCREENSHOT_FILE}" "Screenshot" "Saved to ${SCREENSHOT_FILE}."
+  ;;
+"--window")
+  grim -g "$(hyprctl -j activewindow | jq -r '"\(.at[0]),\(.at[1]) \(.size[0])x\(.size[1])"')" "${SCREENSHOT_FILE}" || exit 1
+  dunstify -a "Screenshot" -r 9993 -i "${SCREENSHOT_FILE}" "Screenshot" "Saved to ${SCREENSHOT_FILE}."
+  ;;
+*)
+  grim "${SCREENSHOT_FILE}" || exit 1
+  dunstify -a "Screenshot" -r 9993 -i "${SCREENSHOT_FILE}" "Screenshot" "Saved to ${SCREENSHOT_FILE}."
+  ;;
+esac

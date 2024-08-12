@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+
+function toggle-clipboard() {
+  local clipboard_list="" chosen_item=""
+  clipboard_list="$(cliphist list)"
+
+  [[ -z "${clipboard_list}" ]] && dunstify -a "Clipboard" -i "clipboard" -r 9993 "Clipboard" "History doesn't exist." && exit 1
+
+  if [[ "${1}" == 1 ]]; then
+    cliphist wipe && dunstify -a "Clipboard" -i "clipboard" -r 9993 "Clipboard" "Wiped history."
+    exit 0
+  fi
+
+  chosen_item="$(printf "%s\n" "${clipboard_list}" | rofi -dmenu -display-columns 2 -i -window-title " ")"
+
+  [[ -z "${chosen_item}" ]] && exit 1
+
+  printf "%s\n" "${chosen_item}" | cliphist decode | wl-copy
+
+  dunstify -a "Clipboard" -i "clipboard" -r 9993 "Clipboard" "Copied item to clipboard."
+}
+
+function toggle-drun() {
+  rofi -show drun
+}
+
+function toggle-power() {
+  local chosen_options=""
+  chosen_options=$(printf " Lock\n Suspend\n Reboot\n Shutdown\n Logout\n" | rofi -dmenu -window-title "󰮫" -i | awk '{print $2}')
+  case "${chosen_options}" in
+  "Lock")
+    hyprlock
+    ;;
+  "Suspend")
+    systemctl suspend
+    ;;
+  "Reboot")
+    systemctl reboot
+    ;;
+  "Shutdown")
+    systemctl poweroff
+    ;;
+  "Logout")
+    hyprctl dispatch exit
+    ;;
+  *)
+    exit 1
+    ;;
+  esac
+}
+
+function toggle-run() {
+  rofi -show run
+}
+
+case "${1}" in
+"--clipboard")
+  toggle-clipboard "${2}"
+  ;;
+"--drun")
+  toggle-drun
+  ;;
+"--power")
+  toggle-power
+  ;;
+"--run")
+  toggle-run
+  ;;
+*)
+  exit 1
+  ;;
+esac

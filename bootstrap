@@ -1,0 +1,311 @@
+#!/usr/bin/env bash
+
+shopt -s dotglob
+
+SCRIPT_DIR="$(cd "$(dirname "${0}")" && pwd -P)"
+CONFIG_DIR="${SCRIPT_DIR}/config"
+CONFIG_RC_DIR="${SCRIPT_DIR}/config.rc"
+
+PACKAGES_FILE="${SCRIPT_DIR}/packages.txt"
+
+function fprint() {
+  local str="${1}" type="${2}" newline="${3}"
+
+  declare -A colors=(
+    [red]="\033[31m"
+    [yellow]="\033[33m"
+    [blue]="\033[34m"
+    [reset]="\033[0m"
+  )
+
+  local color="blue" type_prefix=""
+
+  case "${type}" in
+  "err")
+    type_prefix=":err:"
+    color="red"
+    ;;
+  "info")
+    type_prefix="::"
+    ;;
+  "warn")
+    type_prefix=":warn:"
+    color="yellow"
+    ;;
+  esac
+
+  if [[ "${newline}" -eq 0 ]]; then
+    printf "%b%s%b %s\n" "${colors[${color}]}" "${type_prefix}" "${colors["reset"]}" "${str}"
+  else
+    printf "%b%s%b %s" "${colors[${color}]}" "${type_prefix}" "${colors["reset"]}" "${str}"
+  fi
+}
+
+function finish-bootstrap() {
+  local default_shell=""
+  default_shell="$(printf "%s\n" "${SHELL}")"
+
+  if ! package-exist "zsh"; then
+    fprint "Package \"zsh\" isn't installed, installing." "warn"
+    sudo pacman -S --noconfirm "zsh" || {
+      fprint "Failed to install package \"zsh\", exiting." "err"
+      exit 1
+    }
+  fi
+
+  local zsh_path=""
+  zsh_path="$(which zsh)"
+
+  if [[ "${default_shell}" != "${zsh_path}" ]]; then
+    chsh -s "$(printf '%s\n' "${zsh_path}")" || {
+      fprint "Failed to default shell to \"${zsh_path}\", exiting." "err"
+      exit 1
+    }
+  else
+    fprint "Default shell is already \"${default_shell}\", skipping." "info"
+  fi
+
+  local zshenv_file=""
+  zshenv_file="${SCRIPT_DIR}/config/.zshenv"
+
+  sed -i '/# DOTFILES BOOTSTRAP START/,/# DOTFILES BOOTSTRAP END/d' "${zshenv_file}"
+  fprint "Removed bootstrap lines from file \"${zshenv_file}\"." "info"
+
+  cat <<EOF >>"${zshenv_file}"
+# DOTFILES BOOTSTRAP START
+export DOTFILES_DIR="${SCRIPT_DIR}"
+# DOTFILES BOOTSTRAP END
+EOF
+
+  fprint "Appened bootstrap lines to file \"${zshenv_file}\"." "info"
+
+  local hyprlock_conf="${SCRIPT_DIR}/config/hypr/hyprlock.conf"
+
+  sed -i "s|^\s*path\s*=\s*.*|  path = ${SCRIPT_DIR}/config/Wallpapers/.Wallpaper.png|" "${hyprlock_conf}"
+  fprint "Changed path line from file \"${hyprlock_conf}\"." "info"
+
+  local hyprpaper_conf="${SCRIPT_DIR}/config/hypr/hyprpaper.conf"
+
+  [[ ! -r "${hyprpaper_conf}" ]] && {
+    fprint "File \"${hyprpaper_conf}\" doesn't exist, exiting." "err"
+    exit 1
+  }
+
+  rm -rf "${hyprpaper_conf}" || {
+    fprint "Failed to delete file \"${hyprpaper_conf}\", exiting." "err"
+    exit 1
+  }
+
+  fprint "Deleted file \"${hyprpaper_conf}\"." "info"
+
+  cat <<EOF >>"${hyprpaper_conf}"
+preload = ${SCRIPT_DIR}/config/Wallpapers/.Wallpaper.png
+wallpaper = eDP-1,${SCRIPT_DIR}/config/Wallpapers/.Wallpaper.png
+splash = false
+ipc = true
+
+# Linus.png
+EOF
+
+  fprint "Created file \"${hyprpaper_conf}\"." "info"
+
+  local tpm_dir
+  tpm_dir="$(read-rc 'tmux')/plugins/tpm"
+
+  if [[ ! -r "${tpm_dir}" ]]; then
+    git clone "https://github.com/tmux-plugins/tpm" "${tpm_dir}" || {
+      fprint "Failed to clone \"https://github.com/tmux-plugins/tpm\" to \"${tpm_dir}\"." "err"
+      exit 1
+    }
+    fprint "Cloned \"https://github.com/tmux-plugins/tpm\" to \"${tpm_dir}\" via git." "info"
+  else
+    fprint "Directory \"${tpm_dir}\" already exist, skipping." "info"
+  fi
+
+  if ! pacman -F /usr/bin/zsh >/dev/null 2>&1; then
+    sudo pacman -Fy || {
+      fprint "Failed to query packages database, exiting."
+      exit 1
+    }
+    fprint "Queried packages database via pacman." "info"
+  else
+    fprint "Packages database is already queried, skipping." "info"
+  fi
+}
+
+function install-paru() {
+  if ! package-exist "base-devel"; then
+    sudo pacman -S --needed --noconfirm "base-devel" || {
+      fprint "Failed to install package \"base-devel\", exiting." "err"
+      exit 1
+    }
+    fprint "Installed package \"base-devel\" via pacman." "info"
+  else
+    fprint "Package \"base-devel\" is already installed, skipping." "info"
+  fi
+
+  local item_dest="" default_dest="${HOME}/.paru"
+  fprint "Paru installation destination [${default_dest}] " "info" 1
+  read -r item_dest
+  item_dest=$(eval printf "%s" "${item_dest:-${default_dest}}")
+  echo "${item_dest}"
+
+  if ! package-exist "git"; then
+    sudo pacman -S --noconfirm "git" || {
+      fprint "Failed to install package \"git\", exiting." "err"
+      exit 1
+    }
+    fprint "Installed package \"git\" via pacman." "info"
+  else
+    fprint "Package \"git\" is already installed, skipping." "info"
+  fi
+
+  git clone "https://aur.archlinux.org/paru-git.git" "${item_dest}" || {
+    fprint "Failed to clone \"https://aur.archlinux.org/paru-git.git\" to \"${item_dest}\"." "err"
+    exit 1
+  }
+  cd "${item_dest}" || {
+    fprint "Failed to change into directory \"${item_dest}\"." "err"
+    exit 1
+  }
+  makepkg -si || {
+    fprint "Failed to build package \"paru\"." "err"
+    exit 1
+  }
+}
+
+function install-packages() {
+  [[ ! -r "${PACKAGES_FILE}" ]] && {
+    fprint "File \"${PACKAGES_FILE}\" isn't readable, exiting." "err"
+    exit 1
+  }
+
+  if ! package-exist "paru"; then
+    install-paru
+  else
+    fprint "Package \"paru\" is already installed, skipping." "info"
+  fi
+
+  local pacman_packages paru_packages
+  pacman_packages=$(awk '/\[\[ pacman start \]\]/ {flag=1; next} /\[\[ pacman end \]\]/ {flag=0} flag' "${PACKAGES_FILE}")
+  paru_packages=$(awk '/\[\[ paru start \]\]/ {flag=1; next} /\[\[ paru end \]\]/ {flag=0} flag' "${PACKAGES_FILE}")
+
+  IFS=$'\n' read -r -d '' -a pacman_packages <<<"${pacman_packages}"
+  IFS=$'\n' read -r -d '' -a paru_packages <<<"${paru_packages}"
+
+  [[ -z "${pacman_packages}" ]] && {
+    fprint "No pacman packages found in file \"${PACKAGES_FILE}\", exiting." "err"
+    exit 1
+  }
+
+  [[ -z "${paru_packages}" ]] && {
+    fprint "No paru packages found in file \"${PACKAGES_FILE}\", exiting." "err"
+    exit 1
+  }
+
+  for package in "${pacman_packages[@]}"; do
+    if package-exist "${package}"; then
+      fprint "Package \"${package}\" is already installed, skipping." "info"
+    else
+      sudo pacman -S --noconfirm "${package}" || {
+        fprint "Failed to install package \"${package}\", exiting." "err"
+        exit 1
+      }
+      fprint "Installed package \"${package}\" via pacman." "info"
+    fi
+  done
+
+  for package in "${paru_packages[@]}"; do
+    if package-exist "${package}"; then
+      fprint "Package \"${package}\" is already installed, skipping." "info"
+    else
+      paru -S --noconfirm "${package}" || {
+        fprint "Failed to install package \"${package}\", exiting." "err"
+        exit 1
+      }
+      fprint "Installed package \"${package}\" via paru." "info"
+    fi
+  done
+}
+
+function link-dotfiles() {
+  for item in "${CONFIG_DIR}"/*; do
+    [[ "$(basename "${item}")" == "Wallpapers" ]] && continue
+
+    [[ ! -r "${item}" ]] && {
+      fprint "Item \"${item}\" isn't readable, continuing." "warn"
+      continue
+    }
+
+    local item_dest=""
+    item_dest="$(read-rc "$(basename "${item}")")"
+
+    if [[ -e "${item_dest}" ]]; then
+      local action=""
+      fprint "Item destination \"${item_dest}\" already exists." "warn"
+      fprint "Choose an action [(o)verwrite, (b)ackup and overwrite, (s)kip] " "warn" 1
+      read -r action
+      case "${action}" in
+      o)
+        rm -rf "${item_dest}"
+        fprint "Deleted destination \"${item_dest}\"." "info"
+        ;;
+      b)
+        mv "${item_dest}" "${item_dest}.bak"
+        fprint "Backed up destination \"${item_dest}\" at \"${item_dest}.bak\"." "info"
+        ;;
+      s | *)
+        fprint "Skipping \"${item_dest}\"." "info"
+        continue
+        ;;
+      esac
+    fi
+
+    mkdir -p "$(dirname "${item_dest}")"
+
+    ln -s "${item}" "${item_dest}" || {
+      fprint "Failed to symlink item \"${item}\" to \"${item_dest}\", exiting."
+      exit 1
+    }
+    fprint "Symlinked destination \"${item_dest}\" to item \"${item}\"." "info"
+  done
+}
+
+function package-exist() {
+  local packages="${1}"
+  if pacman -Qq | grep -q "${packages}"; then
+    return 0
+  else
+    return 1
+  fi
+}
+
+function read-rc() {
+  local item="${1}" itemrc=""
+
+  [[ -z "${item}" ]] && exit 1
+
+  itemrc="${CONFIG_RC_DIR}/${item}.rc"
+
+  [[ ! -r "${itemrc}" ]] && {
+    fprint "Failed to read file \"${itemrc}\", exiting" "err"
+    exit 1
+  }
+
+  local item_dest=""
+  item_dest="$(cat "${itemrc}")"
+
+  [[ -z "${item_dest}" ]] && {
+    fprint "Failed to read destination in file \"${itemrc}\", exiting." "err" 0
+    exit 1
+  }
+
+  printf "%s\n" "$(eval printf "%s" "${item_dest}")"
+}
+
+install-packages
+link-dotfiles
+finish-bootstrap
+
+fprint "Dotfiles installation completed, exiting." "info"
+exit 0
