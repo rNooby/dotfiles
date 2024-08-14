@@ -42,6 +42,21 @@ function fprint() {
 }
 
 function finish-bootstrap() {
+  if ! package-exist "bat"; then
+    fprint "Package \"bat\" isn't installed, installing." "warn"
+    sudo pacman -S --noconfirm "bat" || {
+      fprint "Failed to install package \"bat\", exiting." "err"
+      exit 1
+    }
+  fi
+
+  bat cache --build || {
+    fprint "Failed to build bat cache, exiting." "err"
+    exit 1
+  }
+
+  fprint "Builded bat cache." "info"
+
   local default_shell=""
   default_shell="$(printf "%s\n" "${SHELL}")"
 
